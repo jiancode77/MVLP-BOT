@@ -1,46 +1,163 @@
 export const name = 'allmenu';
-export const description = 'Semua menu lengkap dengan button interaktif';
+export const description = 'Menu lengkap dengan button interaktif';
 export async function execute({ sock, sender, settings }) {
-  const menuSections = [
+  const button = [
     {
-      title: "🤖 BOT COMMANDS",
-      rows: [
-        { title: "📊 Status Bot", description: "Cek status bot", rowId: `${settings.prefix}status` },
-        { title: "⚡ Ping", description: "Cek kecepatan bot", rowId: `${settings.prefix}ping` },
-        { title: "ℹ️ Info Bot", description: "Informasi bot", rowId: `${settings.prefix}info` },
-        { title: "⏰ Runtime", description: "Waktu aktif bot", rowId: `${settings.prefix}runtime` }
-      ]
+      name: "single_select",
+      buttonParamsJson: JSON.stringify({
+        title: "Select Here",
+        sections: [
+          {
+            title: "Main Command",
+            rows: [
+              { 
+                header: "Show Menu", 
+                title: "🔮 Tampilkan Menu", 
+                description: 'Menampilkan Daftar Fitur', 
+                id: '.allmenu' 
+              },
+              { 
+                header: "User Info", 
+                title: "💠 Status User", 
+                description: 'Menampilkan Status Pengguna', 
+                id: '.info' 
+              },
+              { 
+                header: "Owner Contact", 
+                title: "👑 Hubungi Kami", 
+                description: 'Menampilkan Kontak Pemilik', 
+                id: '.owner' 
+              },
+              { 
+                header: "System Status", 
+                title: "⚙️ Statis Mesin", 
+                description: 'Menampilkan Informasi Server Bot', 
+                id: '.ping' 
+              },
+              { 
+                header: "Support Development", 
+                title: "❤️ Donasi", 
+                description: 'Menampilkan Kotak Amal', 
+                id: '.donasi' 
+              },
+              { 
+                header: "Source Code Bot", 
+                title: "🧩 Script Bot", 
+                description: 'Dapatkan Gratis Script bot', 
+                id: '.sc' 
+              }
+            ]
+          },
+          {
+            title: "Bot Control",
+            rows: [
+              { 
+                header: "Self Mode", 
+                title: "Owner Only", 
+                description: 'Beralih Ke Mode Self', 
+                id: '.self' 
+              },
+              { 
+                header: "Public Mode", 
+                title: "Owner Only", 
+                description: 'Beralih Ke Mode Public', 
+                id: '.public' 
+              },
+              { 
+                header: "Group Only True", 
+                title: "Owner Only", 
+                description: 'Aktifkan Mode Khusus Grup',
+                id: '.gconly on' 
+              },
+              { 
+                header: "Grup Only False", 
+                title: "Owner Only", 
+                description: 'Nonaktifkan Mode Khusus Grup', 
+                id: '.gconly off' 
+              },
+              { 
+                header: "Auto View Sw True", 
+                title: "Owner Only", 
+                description: 'Mengaktifkan Auto View Sw', 
+                id: '.autoviewsw on' 
+              },
+              { 
+                header: "Auto View Sw False", 
+                title: "Owner Only", 
+                description: 'Nonaktifkan Auto View Sw', 
+                id: '.autoviewsw off' 
+              }
+            ]
+          },
+          {
+            title: "User Tools",
+            rows: [
+              { 
+                header: "My JID", 
+                title: "🆔 My JID", 
+                description: 'Lihat JID Anda', 
+                id: '.myjid' 
+              },
+              { 
+                header: "My LID", 
+                title: "📧 My LID", 
+                description: 'Lihat LID Anda', 
+                id: '.mylid' 
+              },
+              { 
+                header: "My Info", 
+                title: "👤 My Info", 
+                description: 'Info akun lengkap', 
+                id: '.myinfo' 
+              },
+              { 
+                header: "Group Info", 
+                title: "📋 Group Info", 
+                description: 'Informasi group', 
+                id: '.groupinfo' 
+              },
+              { 
+                header: "Group Link", 
+                title: "🔗 Group Link", 
+                description: 'Dapatkan link group', 
+                id: '.linkgroup' 
+              },
+              { 
+                header: "Speed Test", 
+                title: "🚀 Speed Test", 
+                description: 'Test kecepatan bot', 
+                id: '.speedtest' 
+              }
+            ]
+          }
+        ]
+      })
     },
     {
-      title: "👤 USER COMMANDS", 
-      rows: [
-        { title: "🆔 My JID", description: "Lihat JID Anda", rowId: `${settings.prefix}myjid` },
-        { title: "📧 My LID", description: "Lihat LID Anda", rowId: `${settings.prefix}mylid` },
-        { title: "👤 My Info", description: "Info akun Anda", rowId: `${settings.prefix}myinfo` }
-      ]
-    },
-    {
-      title: "👥 GROUP COMMANDS",
-      rows: [
-        { title: "📋 Group Info", description: "Informasi group", rowId: `${settings.prefix}groupinfo` },
-        { title: "🔗 Group Link", description: "Dapatkan link group", rowId: `${settings.prefix}linkgroup` }
-      ]
-    },
-    {
-      title: "🔧 TOOLS COMMANDS",
-      rows: [
-        { title: "🚀 Speed Test", description: "Test kecepatan", rowId: `${settings.prefix}speedtest` }
-      ]
+      name: "cta_url",
+      buttonParamsJson: JSON.stringify({
+        display_text: "🌐 Official Website",
+        url: "https://github.com",
+        merchant_url: "https://github.com"
+      })
     }
   ];
 
-  const buttonMessage = {
-    text: `🎯 *ALL MENU BOT* 🤖\n\nPilih menu yang diinginkan dari button di bawah:\n\n*📝 Cara penggunaan:*\nKlik salah satu button di bawah ini untuk menjalankan command`,
-    footer: `Bot WhatsApp • Prefix: ${settings.prefix}`,
-    title: "📋 DAFTAR MENU LENGKAP",
-    buttonText: "📁 BUKA MENU",
-    sections: menuSections
+  const message = {
+    text: `┏━━〔 *JIAN SYSTEM INTERFACE* 〕━━┓\n\n` +
+          `Halo! Selamat datang di bot WhatsApp.\n\n` +
+          `*🤖 BOT FEATURES:*\n` +
+          `• Multi-Device Support\n` +
+          `• Fast Response\n` +
+          `• 20+ Commands\n` +
+          `• Group & Private Support\n\n` +
+          `*📝 INSTRUKSI:*\n` +
+          `Pilih menu di bawah untuk menjalankan command\n` +
+          `Gunakan prefix: *${settings.prefix}*`,
+    footer: "JIAN BOT • WhatsApp Multi-Device",
+    templateButtons: button,
+    headerType: 1
   };
 
-  await sock.sendMessage(sender, buttonMessage);
+  await sock.sendMessage(sender, message);
 }
