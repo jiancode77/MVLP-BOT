@@ -1,19 +1,22 @@
 import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys';
 import chalk from 'chalk';
 import qrcode from 'qrcode-terminal';
-import settings from './settings.js' assert { type: 'json' };
+import settings from './settings.js';
 import fs from 'fs';
-import { promisify } from 'util';
-
-const readdir = promisify(fs.readdir);
+import { readdir } from 'fs/promises';
 
 const plugins = {};
-const pluginFiles = await readdir('./plugins');
-for (const file of pluginFiles) {
-  if (file.endsWith('.js')) {
-    const plugin = await import(`./plugins/${file}`);
-    plugins[plugin.name] = plugin;
+try {
+  const pluginFiles = await readdir('./plugins');
+  for (const file of pluginFiles) {
+    if (file.endsWith('.js')) {
+      const plugin = await import(`./plugins/${file}`);
+      plugins[plugin.name] = plugin;
+    }
   }
+} catch (error) {
+  console.log(chalk.yellow('Folder plugins tidak ditemukan, membuat folder...'));
+  fs.mkdirSync('./plugins', { recursive: true });
 }
 
 async function startBot() {
@@ -29,20 +32,29 @@ async function startBot() {
     const { connection, qr, pairingCode } = update;
 
     if (qr) {
-      console.log(chalk.yellow('Scan QR Code berikut:'));
+      console.log(chalk.yellow('\n╔══════════════════════════════╗'));
+      console.log(chalk.yellow('║        SCAN QR CODE         ║'));
+      console.log(chalk.yellow('╚══════════════════════════════╝'));
       qrcode.generate(qr, { small: true });
     }
 
     if (pairingCode) {
-      console.log(chalk.blue(`Pairing Code: ${pairingCode}`));
+      console.log(chalk.blue('\n╔══════════════════════════════╗'));
+      console.log(chalk.blue('║         PAIRING CODE         ║'));
+      console.log(chalk.blue('║                              ║'));
+      console.log(chalk.blue(`║         ${pairingCode}           ║`));
+      console.log(chalk.blue('║                              ║'));
+      console.log(chalk.blue('╚══════════════════════════════╝'));
     }
 
     if (connection === 'open') {
-      console.log(chalk.green('✓ Berhasil terhubung ke WhatsApp!'));
+      console.log(chalk.green('\n╔══════════════════════════════╗'));
+      console.log(chalk.green('║   BERHASIL TERHUBUNG KE WA   ║'));
+      console.log(chalk.green('╚══════════════════════════════╝'));
     }
 
     if (connection === 'close') {
-      console.log(chalk.red('Koneksi terputus, mencoba menghubungkan kembali...'));
+      console.log(chalk.red('\nKoneksi terputus, menghubungkan kembali...'));
       startBot();
     }
   });
