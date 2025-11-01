@@ -10,7 +10,8 @@ try {
   const pluginFiles = await readdir('./plugins');
   for (const file of pluginFiles) {
     if (file.endsWith('.js')) {
-      const plugin = await import(`./plugins/${file}`);
+      const pluginPath = `./plugins/${file}`;
+      const plugin = await import(pluginPath);
       plugins[plugin.name] = plugin;
     }
   }
