@@ -1,22 +1,41 @@
-export const name = 'ping';
-export const description = 'Cek latency bot';
-export async function execute({ sock, sender }) {
-  const start = Date.now();
-  const pingMsg = await sock.sendMessage(sender, { text: '🏓 Measuring ping...' });
-  const latency = Date.now() - start;
-
-  const pingButtons = [
-    { buttonId: `${settings.prefix}speedtest`, buttonText: { displayText: '🚀 SPEED TEST' }, type: 1 },
-    { buttonId: `${settings.prefix}status`, buttonText: { displayText: '📊 STATUS' }, type: 1 },
-    { buttonId: `${settings.prefix}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+export const name = 'owner';
+export const description = 'Info pemilik bot';
+export async function execute({ sock, sender, settings }) {
+  const button = [
+    {
+      name: "quick_reply",
+      buttonParamsJson: JSON.stringify({
+        display_text: "ℹ️ INFO",
+        id: ".info"
+      })
+    },
+    {
+      name: "quick_reply",
+      buttonParamsJson: JSON.stringify({
+        display_text: "📋 MENU", 
+        id: ".menu"
+      })
+    },
+    {
+      name: "quick_reply", 
+      buttonParamsJson: JSON.stringify({
+        display_text: "🏓 PING",
+        id: ".ping"
+      })
+    }
   ];
 
-  const pingMessage = {
-    text: `🏓 *PONG!*\n\n📡 Latency: ${latency}ms\n⚡ Status: ${latency < 500 ? 'Excellent' : latency < 1000 ? 'Good' : 'Slow'}\n💾 Response: ${latency} milliseconds`,
-    footer: `Bot Response Time`,
-    buttons: pingButtons,
+  const message = {
+    text: `👤 *Owner Bot*\n\n` +
+          `📞 ${settings.owner}\n` +
+          `💬 Hubungi owner untuk bantuan\n` +
+          `🔧 Bot Creator\n` +
+          `⚡ WhatsApp Bot Multi-Device\n` +
+          `🌟 JIAN BOT System`,
+    footer: "Contact Owner for Support",
+    templateButtons: button,
     headerType: 1
   };
 
-  await sock.sendMessage(sender, pingMessage);
+  await sock.sendMessage(sender, message);
 }
