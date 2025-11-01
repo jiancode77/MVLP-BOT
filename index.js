@@ -1,4 +1,4 @@
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import chalk from 'chalk';
 import qrcode from 'qrcode-terminal';
 import readline from 'readline';
@@ -26,14 +26,12 @@ try {
   const pluginFiles = await readdir('./plugins');
   for (const file of pluginFiles) {
     if (file.endsWith('.js')) {
-      const pluginPath = `./plugins/${file}`;
-      const plugin = await import(pluginPath);
+      const plugin = await import(`./plugins/${file}`);
       plugins[plugin.name] = plugin;
     }
   }
   console.log(chalk.green(`✓ Loaded ${Object.keys(plugins).length} plugins`));
 } catch (error) {
-  console.log(chalk.yellow('⚠ Folder plugins tidak ditemukan, membuat folder...'));
   fs.mkdirSync('./plugins', { recursive: true });
 }
 
@@ -55,29 +53,20 @@ async function connectToWhatsApp() {
 
   const sock = makeWASocket({
     version,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, {
-        log: console
-      }),
-    },
+    auth: state,
     printQRInTerminal: false,
     browser: ['Ubuntu', 'Chrome', '20.0.04'],
     markOnlineOnConnect: true,
-    generateHighQualityLinkPreview: true,
-    syncFullHistory: false,
-    retryRequestDelayMs: 1000,
   });
 
   sock.ev.on('connection.update', async (update) => {
-    const { connection, qr, pairingCode, isNewLogin, lastDisconnect } = update;
+    const { connection, qr, pairingCode, lastDisconnect } = update;
 
     if (qr && connectionMethod === '1') {
       console.log(chalk.yellow('\n╔══════════════════════════════╗'));
       console.log(chalk.yellow('║        SCAN QR CODE         ║'));
       console.log(chalk.yellow('╚══════════════════════════════╝'));
       qrcode.generate(qr, { small: true });
-      console.log(chalk.white('Buka WhatsApp > Linked Devices > Scan QR Code'));
     }
 
     if (pairingCode && connectionMethod === '2') {
@@ -87,8 +76,6 @@ async function connectToWhatsApp() {
       console.log(chalk.blue(`║        ${pairingCode}         ║`));
       console.log(chalk.blue('║                              ║'));
       console.log(chalk.blue('╚══════════════════════════════╝'));
-      console.log(chalk.white('Buka WhatsApp > Linked Devices > Link a Device'));
-      console.log(chalk.white(`Masukkan pairing code: ${pairingCode}`));
     }
 
     if (connection === 'open') {
@@ -102,10 +89,7 @@ async function connectToWhatsApp() {
 
     if (connection === 'close') {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
-      console.log(chalk.red('\n⚠ Koneksi terputus...'));
-      
       if (shouldReconnect) {
-        console.log(chalk.yellow('🔄 Mencoba menghubungkan kembali...'));
         setTimeout(connectToWhatsApp, 5000);
       } else {
         console.log(chalk.red('❌ Session expired, hapus folder auth_info dan restart bot'));
@@ -118,23 +102,18 @@ async function connectToWhatsApp() {
 
   sock.ev.on('messages.upsert', async (m) => {
     const msg = m.messages[0];
-    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
+    if (!msg.message) return;
 
     const text = msg.message.conversation || 
-                 msg.message.extendedTextMessage?.text || 
-                 msg.message.imageMessage?.caption ||
-                 msg.message.videoMessage?.caption;
+                 msg.message.extendedTextMessage?.text;
 
     const sender = msg.key.remoteJid;
-    const isGroup = sender.endsWith('@g.us');
     const pushname = msg.pushName || 'Unknown';
 
     if (text && text.startsWith(settings.prefix)) {
       const args = text.slice(settings.prefix.length).trim().split(/ +/);
       const command = args.shift().toLowerCase();
       const plugin = plugins[command];
-
-      console.log(chalk.cyan(`[CMD] ${pushname}: ${text}`));
 
       if (plugin) {
         try {
@@ -143,15 +122,11 @@ async function connectToWhatsApp() {
             sender,
             args,
             text: args.join(' '),
-            isGroup,
             pushname,
             settings
           });
         } catch (error) {
-          console.error(chalk.red(`[ERROR] ${error.message}`));
-          await sock.sendMessage(sender, { 
-            text: `❌ Error: ${error.message}` 
-          });
+          console.error(error);
         }
       }
     }
@@ -160,7 +135,7 @@ async function connectToWhatsApp() {
   return sock;
 }
 
-console.log(chalk.yellow(`\n🔄 Menghubungkan ke WhatsApp: ${phoneNumber}`));
+console.log(chalk.yellow(`\n🔄 Menghubungkan ke WhatsApp...`));
 connectToWhatsApp().catch(err => {
   console.error(chalk.red('❌ Gagal menghubungkan:'), err);
   rl.close();
