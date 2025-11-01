@@ -1,4 +1,4 @@
 export default {
-  prefix: "!",
-  owner: "62895350626000"
+  prefix: ".",
+  owner: "62895325627633"
 };
