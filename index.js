@@ -1,215 +1,182 @@
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
-import chalk from 'chalk';
-import readline from 'readline';
-import fs from 'fs';
-import path from 'path';
-import pino from 'pino';
-import settings from './settings.js';
-import { readdir } from 'fs/promises';
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    fetchLatestBaileysVersion,
+    makeInMemoryStore,
+    jidDecode,
+    proto,
+    getContentType
+} = require("@whiskeysockets/baileys");
+const pino = require("pino");
+const chalk = require("chalk");
+const moment = require("moment");
+const fs = require("fs");
+const readline = require("readline");
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+const store = makeInMemoryStore({ logger: pino().child({ level: "silent", stream: "store" }) });
 
-function question(query) {
-  return new Promise(resolve => {
-    rl.question(query, resolve);
-  });
-}
+const question = (text) => {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+    return new Promise((resolve) => {
+        rl.question(text, (answer) => {
+            rl.close();
+            resolve(answer);
+        });
+    });
+};
 
-const sessions = new Map();
-const SESSIONS_DIR = "./sessions";
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState("./session");
+    const { version } = await fetchLatestBaileysVersion();
 
-if (!fs.existsSync(SESSIONS_DIR)) {
-  fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-}
+    console.log(chalk.cyan(`
+╔════════════════════════════════════════════╗
+║          SFESR WHATSAPP BOT                ║
+║          Version: ${version.join(".")}                     ║
+╚════════════════════════════════════════════╝
+    `));
 
-function createSessionDir(botNumber) {
-  const deviceDir = path.join(SESSIONS_DIR, `device_${botNumber}`);
-  if (!fs.existsSync(deviceDir)) {
-    fs.mkdirSync(deviceDir, { recursive: true });
-  }
-  return deviceDir;
-}
+    const sock = makeWASocket({
+        logger: pino({ level: "silent" }),
+        printQRInTerminal: false,
+        browser: ["Chrome (Linux)", "", ""],
+        auth: state,
+        version
+    });
 
-async function connectToWhatsApp(botNumber) {
-  const sessionDir = createSessionDir(botNumber);
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-  const { version } = await fetchLatestBaileysVersion();
+    store.bind(sock.ev);
 
-  const logger = pino({ level: 'silent' });
-
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    printQRInTerminal: false,
-    logger: logger,
-    browser: ['Ubuntu', 'Chrome', '20.0.04'],
-    markOnlineOnConnect: true,
-    connectTimeoutMs: 60000,
-    keepAliveIntervalMs: 15000,
-  });
-
-  let pairingCodeRequested = false;
-  let connectionEstablished = false;
-
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (connection === "close") {
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      
-      if (statusCode === DisconnectReason.loggedOut) {
-        console.log(chalk.red('┃ LOGGED OUT ┃'));
-        try {
-          if (fs.existsSync(sessionDir)) {
-            fs.rmSync(sessionDir, { recursive: true, force: true });
-          }
-        } catch (error) {
-          console.error("Error deleting session:", error);
-        }
-        return;
-      }
-      
-      console.log(chalk.yellow('┃ RECONNECTING ┃'));
-      setTimeout(() => connectToWhatsApp(botNumber), 2000);
-    } 
-    else if (connection === "open") {
-      if (!connectionEstablished) {
-        connectionEstablished = true;
-        sessions.set(botNumber, sock);
-        console.log(chalk.green('\n╔══════════════════════════════╗'));
-        console.log(chalk.green('║   BERHASIL TERHUBUNG KE WA   ║'));
-        console.log(chalk.green('╚══════════════════════════════╝'));
-        console.log(chalk.white(`📱 Nomor: ${botNumber}`));
-        console.log(chalk.white(`🤖 Prefix: ${settings.prefix}`));
-        console.log(chalk.white(`🟢 Status: Bot aktif!`));
-        rl.close();
+    if (!sock.authState.creds.registered) {
+        console.log(chalk.yellow(`┌────────────────────────────────────────────┐`));
+        console.log(chalk.yellow(`│`) + chalk.white(`  Masukkan Nomor WhatsApp                   `) + chalk.yellow(`│`));
+        console.log(chalk.yellow(`└────────────────────────────────────────────┘`));
         
-        setupMessageHandler(botNumber);
-      }
-    } 
-    else if (connection === "connecting") {
-      console.log(chalk.yellow('┃ MENGHUBUNGKAN ┃'));
-      
-      if (!pairingCodeRequested && !fs.existsSync(`${sessionDir}/creds.json`)) {
-        pairingCodeRequested = true;
-        
-        setTimeout(() => {
-          requestPairingCode(sock, botNumber);
-        }, 1000);
-      }
-    }
+        let phoneNumber = await question(chalk.cyan("  Nomor: "));
+        phoneNumber = phoneNumber.replace(/[^0-9]/g, "");
 
-    if (qr && !pairingCodeRequested) {
-      console.log(chalk.yellow('┃ QR CODE TERSEDIA ┃'));
-      pairingCodeRequested = true;
-    }
-  });
-
-  sock.ev.on("creds.update", saveCreds);
-
-  return sock;
-}
-
-async function requestPairingCode(sock, botNumber) {
-  try {
-    const cleanNumber = botNumber.replace(/[^0-9]/g, '');
-    console.log(chalk.yellow('┃ MEMINTA PAIRING CODE... ┃'));
-    
-    const code = await sock.requestPairingCode(cleanNumber);
-    const formattedCode = code.match(/.{1,4}/g)?.join("-") || code;
-    
-    console.log(chalk.blue('\n╔══════════════════════════════╗'));
-    console.log(chalk.blue('║         PAIRING CODE         ║'));
-    console.log(chalk.blue('║                              ║'));
-    console.log(chalk.blue(`║        ${formattedCode}         ║`));
-    console.log(chalk.blue('║                              ║'));
-    console.log(chalk.blue('╚══════════════════════════════╝'));
-    console.log(chalk.white('📱 Buka WhatsApp > Linked Devices > Link a Device'));
-    console.log(chalk.white(`🔢 Masukkan pairing code: ${formattedCode}`));
-    console.log(chalk.yellow('⏳ Menunggu verifikasi...'));
-    
-  } catch (error) {
-    console.log(chalk.red(`┃ GAGAL: ${error.message} ┃`));
-    console.log(chalk.yellow('┃ COBA ULANG DALAM 3 DETIK ┃'));
-    
-    setTimeout(() => {
-      requestPairingCode(sock, botNumber);
-    }, 3000);
-  }
-}
-
-function setupMessageHandler(botNumber) {
-  const sock = sessions.get(botNumber);
-  if (!sock) return;
-
-  sock.ev.on('messages.upsert', async (m) => {
-    const msg = m.messages[0];
-    if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
-
-    const text = msg.message.conversation || 
-                 msg.message.extendedTextMessage?.text ||
-                 msg.message.imageMessage?.caption ||
-                 msg.message.videoMessage?.caption;
-
-    const sender = msg.key.remoteJid;
-    const pushname = msg.pushName || 'Unknown';
-
-    if (text && text.startsWith(settings.prefix)) {
-      const args = text.slice(settings.prefix.length).trim().split(/ +/);
-      const command = args.shift().toLowerCase();
-      const plugin = plugins[command];
-
-      console.log(chalk.cyan(`[CMD] ${pushname}: ${text}`));
-
-      if (plugin) {
-        try {
-          await plugin.execute({
-            sock: sock,
-            sender,
-            args,
-            text: args.join(' '),
-            pushname,
-            settings
-          });
-        } catch (error) {
-          console.error(chalk.red(`[ERROR] ${error.message}`));
+        if (!phoneNumber.startsWith("62")) {
+            phoneNumber = "62" + phoneNumber;
         }
-      }
+
+        setTimeout(async () => {
+            let code = await sock.requestPairingCode(phoneNumber);
+            code = code?.match(/.{1,4}/g)?.join("-") || code;
+            
+            console.log(chalk.yellow(`┌────────────────────────────────────────────┐`));
+            console.log(chalk.yellow(`│`) + chalk.white(`  Kode Pairing: `) + chalk.green(code) + chalk.white(`                    `) + chalk.yellow(`│`));
+            console.log(chalk.yellow(`└────────────────────────────────────────────┘`));
+        }, 3000);
     }
-  });
+
+    sock.ev.on("messages.upsert", async (chatUpdate) => {
+        try {
+            const mek = chatUpdate.messages[0];
+            if (!mek.message) return;
+            
+            mek.message = (Object.keys(mek.message)[0] === "ephemeralMessage") 
+                ? mek.message.ephemeralMessage.message 
+                : mek.message;
+            
+            if (mek.key && mek.key.remoteJid === "status@broadcast") return;
+            if (!mek.key.fromMe && chatUpdate.type === "notify") {
+                const m = await require("./lib/serialize")(sock, mek, store);
+                require("./case")(sock, m, chatUpdate, store);
+            }
+        } catch (err) {
+            console.log(err);
+        }
+    });
+
+    sock.ev.on("connection.update", async (update) => {
+        const { connection, lastDisconnect } = update;
+        
+        if (connection === "close") {
+            let reason = lastDisconnect?.error?.output?.statusCode;
+            if (reason === DisconnectReason.badSession) {
+                console.log(chalk.red(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.red(`│`) + chalk.white(`  Bad Session, Reconnecting...              `) + chalk.red(`│`));
+                console.log(chalk.red(`└────────────────────────────────────────────┘`));
+                startBot();
+            } else if (reason === DisconnectReason.connectionClosed) {
+                console.log(chalk.yellow(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.yellow(`│`) + chalk.white(`  Connection Closed, Reconnecting...        `) + chalk.yellow(`│`));
+                console.log(chalk.yellow(`└────────────────────────────────────────────┘`));
+                startBot();
+            } else if (reason === DisconnectReason.connectionLost) {
+                console.log(chalk.yellow(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.yellow(`│`) + chalk.white(`  Connection Lost, Reconnecting...          `) + chalk.yellow(`│`));
+                console.log(chalk.yellow(`└────────────────────────────────────────────┘`));
+                startBot();
+            } else if (reason === DisconnectReason.connectionReplaced) {
+                console.log(chalk.red(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.red(`│`) + chalk.white(`  Connection Replaced                       `) + chalk.red(`│`));
+                console.log(chalk.red(`└────────────────────────────────────────────┘`));
+                startBot();
+            } else if (reason === DisconnectReason.loggedOut) {
+                console.log(chalk.red(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.red(`│`) + chalk.white(`  Device Logged Out                         `) + chalk.red(`│`));
+                console.log(chalk.red(`└────────────────────────────────────────────┘`));
+                if (fs.existsSync("./session")) {
+                    fs.rmSync("./session", { recursive: true, force: true });
+                }
+                startBot();
+            } else if (reason === DisconnectReason.restartRequired) {
+                console.log(chalk.yellow(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.yellow(`│`) + chalk.white(`  Restart Required, Restarting...           `) + chalk.yellow(`│`));
+                console.log(chalk.yellow(`└────────────────────────────────────────────┘`));
+                startBot();
+            } else if (reason === DisconnectReason.timedOut) {
+                console.log(chalk.yellow(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.yellow(`│`) + chalk.white(`  Connection Timed Out, Reconnecting...     `) + chalk.yellow(`│`));
+                console.log(chalk.yellow(`└────────────────────────────────────────────┘`));
+                startBot();
+            } else {
+                console.log(chalk.red(`┌────────────────────────────────────────────┐`));
+                console.log(chalk.red(`│`) + chalk.white(`  Unknown Reason: ${reason}                 `) + chalk.red(`│`));
+                console.log(chalk.red(`└────────────────────────────────────────────┘`));
+                startBot();
+            }
+        } else if (connection === "open") {
+            console.log(chalk.green(`┌────────────────────────────────────────────┐`));
+            console.log(chalk.green(`│`) + chalk.white(`  Bot Connected Successfully!               `) + chalk.green(`│`));
+            console.log(chalk.green(`│`) + chalk.white(`  Time: ${moment().format("HH:mm:ss")}                        `) + chalk.green(`│`));
+            console.log(chalk.green(`└────────────────────────────────────────────┘`));
+        }
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.sendButtonMessage = async (jid, buttons, quoted, opts = {}) => {
+        const message = {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: {
+                        header: opts.header || undefined,
+                        body: { text: opts.body || "" },
+                        footer: { text: opts.footer || "" },
+                        nativeFlowMessage: {
+                            buttons: buttons.map(btn => ({
+                                name: "quick_reply",
+                                buttonParamsJson: JSON.stringify({
+                                    display_text: btn.displayText || btn.text,
+                                    id: btn.buttonId || btn.id
+                                })
+                            })),
+                            messageParamsJson: ""
+                        }
+                    }
+                }
+            }
+        };
+
+        return await sock.relayMessage(jid, message, { quoted });
+    };
+
+    return sock;
 }
 
-const plugins = {};
-try {
-  const pluginFiles = await readdir('./plugins');
-  for (const file of pluginFiles) {
-    if (file.endsWith('.js')) {
-      const plugin = await import(`./plugins/${file}`);
-      plugins[plugin.name] = plugin;
-    }
-  }
-  console.log(chalk.green(`✓ Loaded ${Object.keys(plugins).length} plugins`));
-} catch (error) {
-  fs.mkdirSync('./plugins', { recursive: true });
-}
-
-console.log(chalk.cyan('╔══════════════════════════════╗'));
-console.log(chalk.cyan('║      WHATSAPP BOT START      ║'));
-console.log(chalk.cyan('╚══════════════════════════════╝'));
-
-console.log(chalk.yellow('\n╔══════════════════════════════╗'));
-console.log(chalk.yellow('║     MASUKAN NOMOR WHATSAPP   ║'));
-console.log(chalk.yellow('╚══════════════════════════════╝'));
-
-const phoneNumber = await question(chalk.blue('Nomor WhatsApp (contoh: 6281234567890): '));
-
-if (!phoneNumber) {
-  console.log(chalk.red('❌ Nomor WhatsApp harus diisi!'));
-  process.exit(1);
-}
-
-console.log(chalk.yellow(`\n🔄 Menghubungkan ke WhatsApp: ${phoneNumber}`));
-await connectToWhatsApp(phoneNumber);
+startBot();
