@@ -1,0 +1,10 @@
+global.botname = "Simple Bot v1.7";
+global.botname2 = "Simple Bot v1.7 Connected";
+global.ownername = "Simple Bot Owner";
+global.owner = "";
+global.jids = "nomorlu@s.whatsapp.net";
+global.ownerNumbers = ["jid nomor,bukann nomor whatsapp@s.whatsapp.net"];
+global.thumbnail = "https://uploader.zenzxz.dpdns.org/uploads/1767324370841.jpeg";
+global.pairing_code = true;
+global.custompairing = true;
+global.prefix = ".";
